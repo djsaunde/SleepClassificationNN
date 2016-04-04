@@ -7,7 +7,7 @@ T = 1.0 / 220.0
 
 p = input('Enter participant number: ')
 
-data = open('/home/dan/Documents/PSG Reports for NN Project/p%s.txt' % p, 'r')
+data = open('/home/dan/PycharmProjects/SleepClassificationNN/PSG Data/p%s.txt' % p, 'r')
 
 print 'reading file'
 
@@ -48,7 +48,9 @@ for j in range(10):
 	label, = plt.plot(xf, 2.0/N * np.abs(yf[0:N/2]), label='signal %d' % (j+1))
 	labels.append(label)
 
-write_data = open('fft_data/p%d_fft.txt' % p, 'w')
+plt.show()
+
+write_data = open('p%d_fft.txt' % p, 'w')
 
 print 'writing to file'
 
