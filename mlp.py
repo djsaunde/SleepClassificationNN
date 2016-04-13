@@ -1,22 +1,17 @@
+
 """
 This tutorial introduces the multilayer perceptron using Theano.
-
  A multilayer perceptron is a logistic regressor where
 instead of feeding the input to the logistic regression you insert a
 intermediate layer, called the hidden layer, that has a nonlinear
 activation function (usually tanh or sigmoid) . One can use many such
 hidden layers making the architecture deep. The tutorial will also tackle
 the problem of MNIST digit classification.
-
 .. math::
-
     f(x) = G( b^{(2)} + W^{(2)}( s( b^{(1)} + W^{(1)} x))),
-
 References:
-
     - textbooks: "Pattern Recognition and Machine Learning" -
                  Christopher M. Bishop, section 5
-
 """
 
 from __future__ import print_function
@@ -29,12 +24,12 @@ import sys
 import timeit
 
 import numpy
-
+import cPickle as pickle
 import theano
 import theano.tensor as T
 
 
-from logistic_sgd import LogisticRegression, load_data
+from logistic_sgd import LogisticRegression
 
 
 # start-snippet-1
@@ -45,23 +40,16 @@ class HiddenLayer(object):
         Typical hidden layer of a MLP: units are fully-connected and have
         sigmoidal activation function. Weight matrix W is of shape (n_in,n_out)
         and the bias vector b is of shape (n_out,).
-
         NOTE : The nonlinearity used here is tanh
-
         Hidden unit activation is given by: tanh(dot(input,W) + b)
-
         :type rng: numpy.random.RandomState
         :param rng: a random number generator used to initialize weights
-
         :type input: theano.tensor.dmatrix
         :param input: a symbolic tensor of shape (n_examples, n_in)
-
         :type n_in: int
         :param n_in: dimensionality of input
-
         :type n_out: int
         :param n_out: number of hidden units
-
         :type activation: theano.Op or function
         :param activation: Non linearity to be applied in the hidden
                            layer
@@ -114,7 +102,6 @@ class HiddenLayer(object):
 # start-snippet-2
 class MLP(object):
     """Multi-Layer Perceptron Class
-
     A multilayer perceptron is a feedforward artificial neural network model
     that has one layer or more of hidden units and nonlinear activations.
     Intermediate layers usually have as activation function tanh or the
@@ -125,25 +112,19 @@ class MLP(object):
 
     def __init__(self, rng, input, n_in, n_hidden, n_out):
         """Initialize the parameters for the multilayer perceptron
-
         :type rng: numpy.random.RandomState
         :param rng: a random number generator used to initialize weights
-
         :type input: theano.tensor.TensorType
         :param input: symbolic variable that describes the input of the
         architecture (one minibatch)
-
         :type n_in: int
         :param n_in: number of input units, the dimension of the space in
         which the datapoints lie
-
         :type n_hidden: int
         :param n_hidden: number of hidden units
-
         :type n_out: int
         :param n_out: number of output units, the dimension of the space in
         which the labels lie
-
         """
 
         # Since we are dealing with a one hidden layer MLP, this will translate
@@ -197,34 +178,88 @@ class MLP(object):
         # keep track of model input
         self.input = input
 
+def unpack(input_list):
+    ret_list = []
+    for i in input_list:
+        for j in i:
+            ret_list.append(j)
+    return ret_list
 
-def test_mlp(learning_rate=0.01, L1_reg=0.00, L2_reg=0.0001, num_epochs=1000, dataset='mnist.pkl.gz', batch_size=20, num_hidden=500):
+def load_data():
+    data = open("data.p","rb")
+    datasets = pickle.load(data)
+    train_data,valid_data,test_data = datasets
+    train_x = []
+    train_y = []
+    for p in train_data:
+        for x in p[0]:
+            train_x.append(numpy.asarray(unpack(x)))
+        for y in p[1]:
+            train_y.append(y)
+    valid_x = []
+    valid_y = []
+    for p in valid_data:
+        for x in p[0]:
+            valid_x.append(numpy.asarray(unpack(x)))
+        for y in p[1]:
+            valid_y.append(y)
+    test_x = []
+    test_y = []
+    for p in test_data:
+        for x in p[0]:
+            test_x.append(numpy.asarray(unpack(x)))
+        for y in p[1]:
+            test_y.append(y)
+
+    for t in train_data:
+        x = numpy.array(t)
+        print(x.shape)
+
+    x = numpy.array(train_x)
+    print(x.shape)
+
+    train_x = theano.shared(numpy.asarray(train_x, dtype = theano.config.floatX),borrow = True)
+    train_y = T.cast(theano.shared(numpy.asarray(train_y, dtype = theano.config.floatX),borrow = True), 'int32')
+    valid_x = theano.shared(numpy.asarray(valid_x, dtype = theano.config.floatX),borrow = True)
+    valid_y = T.cast(theano.shared(numpy.asarray(valid_y, dtype = theano.config.floatX),borrow = True), 'int32')
+    test_x = theano.shared(numpy.asarray(test_x, dtype = theano.config.floatX),borrow = True)
+    test_y = T.cast(theano.shared(numpy.asarray(test_y, dtype = theano.config.floatX),borrow = True), 'int32')
+
+    return train_x,train_y,valid_x,valid_y,test_x,test_y
+
+
+def test_mlp(learning_rate=0.01, L1_reg=0.00, L2_reg=0.0001, n_epochs=1000,
+             dataset='data.p', batch_size=200, n_hidden=100):
     """
-    We demonstrate stochastic gradient descent on the MNIST digit image data set.
-
-    :param learning_rate: learning rate used in the stochastic gradient algorithm
-
-    :param L1_reg: L1-norm's weight when added to the cost
-
-    :param L2_reg: L2-norm's weight when added to the cost
-
-    :param num_epochs: maximum number of epochs to run the stochastic gradient algorithm
-
-    :param dataset: the path of the MNIST dataset file
-
+    Demonstrate stochastic gradient descent optimization for a multilayer
+    perceptron
+    This is demonstrated on MNIST.
+    :type learning_rate: float
+    :param learning_rate: learning rate used (factor for the stochastic
+    gradient
+    :type L1_reg: float
+    :param L1_reg: L1-norm's weight when added to the cost (see
+    regularization)
+    :type L2_reg: float
+    :param L2_reg: L2-norm's weight when added to the cost (see
+    regularization)
+    :type n_epochs: int
+    :param n_epochs: maximal number of epochs to run the optimizer
+    :type dataset: string
+    :param dataset: the path of the MNIST dataset file from
+                 http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz
    """
-    datasets = load_data(dataset)
-
-    train_set_x, train_set_y = datasets[0]
-    valid_set_x, valid_set_y = datasets[1]
-    test_set_x, test_set_y = datasets[2]
+    print ("Training MLP")
+    train_set_x,train_set_y,valid_set_x,valid_set_y,test_set_x,test_set_y = load_data()
 
     # compute number of minibatches for training, validation and testing
     n_train_batches = train_set_x.get_value(borrow=True).shape[0] // batch_size
     n_valid_batches = valid_set_x.get_value(borrow=True).shape[0] // batch_size
     n_test_batches = test_set_x.get_value(borrow=True).shape[0] // batch_size
 
-    # Building the multilayer perceptron
+    ######################
+    # BUILD ACTUAL MODEL #
+    ######################
     print('... building the model')
 
     # allocate symbolic variables for the data
@@ -239,9 +274,9 @@ def test_mlp(learning_rate=0.01, L1_reg=0.00, L2_reg=0.0001, num_epochs=1000, da
     classifier = MLP(
         rng=rng,
         input=x,
-        n_in=28 * 28,
+        n_in=11 * 10,
         n_hidden=n_hidden,
-        n_out=10
+        n_out=6
     )
 
     # start-snippet-4
@@ -276,7 +311,7 @@ def test_mlp(learning_rate=0.01, L1_reg=0.00, L2_reg=0.0001, num_epochs=1000, da
     )
 
     # start-snippet-5
-    # compute the gradient of cost with respect to theta (sotred in params)
+    # compute the gradient of cost with respect to theta (sorted in params)
     # the resulting gradients will be stored in a list gparams
     gparams = [T.grad(cost, param) for param in classifier.params]
 
@@ -391,4 +426,5 @@ def test_mlp(learning_rate=0.01, L1_reg=0.00, L2_reg=0.0001, num_epochs=1000, da
 
 
 if __name__ == '__main__':
+    #load_data()
     test_mlp()

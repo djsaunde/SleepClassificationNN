@@ -1,13 +1,17 @@
 import numpy as np
 import cPickle as pickle
 from numpy.fft import rfft
-from numpy import average
+from itertools import islice
+
+
+def downsample(rows, proportion = 1.0):
+	return list(islice(rows, 0, len(rows), int(1 / proportion)))
 
 
 def get_all_data():
 	train_data = []
 	for i in range(1, 12):
-		if i == 4 or i == 7 or i == 8 or i == 9:
+		if i == 4 or i == 5 or i == 6 or i == 7 or i == 8 or i == 9 or i == 11:
 			continue
 		print '...loading training file for participant %d' % i
 		train_data.append(get_data(i))
@@ -63,12 +67,11 @@ def get_data(index):
 		if (i + 1) % (sample_rate * epoch_length) == 0:
 			inputs = []
 			for (k, value) in enumerate(values):
-				values[k] = np.abs(np.real(rfft(value)))
-				cur_inputs = [average(values[k][0:15]), average(values[k][15:60]), average(values[k][60:120]),
-				              average(values[k][120:180]), average(values[k][180:240]), average(values[k][240:315]),
-				              average(values[k][315:390]), average(values[k][390:660]), average(values[k][660:900]),
-				              average(values[k][900:1500]), average(values[k][1500:3000])]
-				inputs.append(cur_inputs)
+				values[k] = downsample(np.abs(np.real(rfft(value))), 0.2)
+				if len(values[k]) != 600:
+					print(len(values[k]))
+					print('2nd')
+				inputs.append(values[k])
 			epochs.append(np.asarray(inputs))
 
 			values = []
@@ -77,14 +80,13 @@ def get_data(index):
 
 	inputs = []
 	for (k, value) in enumerate(values):
-		for i in range(len(values[k]), 6000):
+		for i in range(len(values[k]) + 1, 6000):
 			values[k].append(0)
-		values[k] = np.abs(np.real(rfft(value)))
-		cur_inputs = [average(values[k][0:15]), average(values[k][15:60]), average(values[k][60:120]),
-				              average(values[k][120:180]), average(values[k][180:240]), average(values[k][240:315]),
-				              average(values[k][315:390]), average(values[k][390:660]), average(values[k][660:900]),
-				              average(values[k][900:1500]), average(values[k][1500:3000])]
-		inputs.append(cur_inputs)
+		values[k] = downsample(np.abs(np.real(rfft(value))), 0.2)
+		if len(values[k]) != 600:
+			print(len(values[k]))
+			print('2nd')
+		inputs.append(values[k])
 	epochs.append(np.asarray(inputs))
 
 	teacher = open("PSG Data/p%d_ss.txt" % index, "r")
@@ -126,13 +128,10 @@ def get_data(index):
 	else:
 		sleep_stages = sleep_stages[0:len(epochs)]
 
-	print len(sleep_stages)
-	print len(epochs)
-
 	return epochs, sleep_stages
 
 
 if __name__ == '__main__':
 	data_sets = get_all_data()
 
-	pickle.dump(data_sets, open('data.p', 'wb'))
+	pickle.dump(data_sets, open('conv_data_5.p', 'wb'))

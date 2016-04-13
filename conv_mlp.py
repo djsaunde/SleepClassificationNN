@@ -10,8 +10,9 @@ import theano
 import theano.tensor as T
 from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv2d
+import cPickle as pickle
 
-from logistic_sgd import LogisticRegression, load_data
+from logistic_sgd import LogisticRegression
 from mlp import HiddenLayer
 
 
@@ -92,10 +93,55 @@ class LeNetConvPoolLayer(object):
         # keep track of model input
         self.input = input
 
+def unpack(input_list):
+    ret_list = []
+    for i in input_list:
+        for j in i:
+            ret_list.append(j)
+    return ret_list
+
+def load_data():
+    data = open("conv_data_10.p","rb")
+    datasets = pickle.load(data)
+    data.close()
+    train_data,valid_data,test_data = datasets
+    train_x = []
+    train_y = []
+    for p in train_data:
+        for x in p[0]:
+            train_x.append(numpy.asarray(unpack(x)))
+        for y in p[1]:
+            train_y.append(y)
+    valid_x = []
+    valid_y = []
+    for p in valid_data:
+        for x in p[0]:
+            valid_x.append(numpy.asarray(unpack(x)))
+        for y in p[1]:
+            valid_y.append(y)
+    test_x = []
+    test_y = []
+    for p in test_data:
+        for x in p[0]:
+            test_x.append(numpy.asarray(unpack(x)))
+        for y in p[1]:
+            test_y.append(y)
+
+    print(len(train_x[0]))
+
+    train_x = theano.shared(numpy.asarray(train_x, dtype = theano.config.floatX), borrow = True)
+    train_y = T.cast(theano.shared(numpy.asarray(train_y, dtype = theano.config.floatX), borrow = True), 'int32')
+    valid_x = theano.shared(numpy.asarray(valid_x, dtype = theano.config.floatX), borrow = True)
+    valid_y = T.cast(theano.shared(numpy.asarray(valid_y, dtype = theano.config.floatX), borrow = True), 'int32')
+    test_x = theano.shared(numpy.asarray(test_x, dtype = theano.config.floatX), borrow = True)
+    test_y = T.cast(theano.shared(numpy.asarray(test_y, dtype = theano.config.floatX), borrow = True), 'int32')
+
+    return train_x, train_y, valid_x, valid_y, test_x, test_y
+
 
 def evaluate_lenet5(learning_rate=0.1, n_epochs=200,
                     dataset='mnist.pkl.gz',
-                    nkerns=[20, 50], batch_size=500):
+                    nkerns=[20, 50], batch_size=1):
     """ Demonstrates lenet on MNIST dataset
 
     :type learning_rate: float
@@ -114,11 +160,7 @@ def evaluate_lenet5(learning_rate=0.1, n_epochs=200,
 
     rng = numpy.random.RandomState(23455)
 
-    datasets = load_data(dataset)
-
-    train_set_x, train_set_y = datasets[0]
-    valid_set_x, valid_set_y = datasets[1]
-    test_set_x, test_set_y = datasets[2]
+    train_set_x, train_set_y, valid_set_x, valid_set_y, test_set_x, test_set_y = load_data()
 
     # compute number of minibatches for training, validation and testing
     n_train_batches = train_set_x.get_value(borrow=True).shape[0]
@@ -141,10 +183,10 @@ def evaluate_lenet5(learning_rate=0.1, n_epochs=200,
     ######################
     print('... building the model')
 
-    # Reshape matrix of rasterized images of shape (batch_size, 28 * 28)
+    # Reshape matrix of rasterized images of shape (batch_size, 3000)
     # to a 4D tensor, compatible with our LeNetConvPoolLayer
-    # (28, 28) is the size of MNIST images.
-    layer0_input = x.reshape((batch_size, 1, 28, 28))
+    # (3000, 1) is the size of the 10 FFT signals.
+    layer0_input = x.reshape((batch_size, 1, 3000, 1))
 
     # Construct the first convolutional pooling layer:
     # filtering reduces the image size to (28-5+1 , 28-5+1) = (24, 24)
@@ -153,9 +195,9 @@ def evaluate_lenet5(learning_rate=0.1, n_epochs=200,
     layer0 = LeNetConvPoolLayer(
         rng,
         input=layer0_input,
-        image_shape=(batch_size, 1, 28, 28),
-        filter_shape=(nkerns[0], 1, 5, 5),
-        poolsize=(2, 2)
+        image_shape=(batch_size, 1, 3000, 1),
+        filter_shape=(nkerns[0], 1, 1500, 1),
+        poolsize=(4, 1)
     )
 
     # Construct the second convolutional pooling layer
@@ -165,9 +207,9 @@ def evaluate_lenet5(learning_rate=0.1, n_epochs=200,
     layer1 = LeNetConvPoolLayer(
         rng,
         input=layer0.output,
-        image_shape=(batch_size, nkerns[0], 12, 12),
-        filter_shape=(nkerns[1], nkerns[0], 5, 5),
-        poolsize=(2, 2)
+        image_shape=(batch_size, nkerns[0], 4, 4),
+        filter_shape=(nkerns[1], nkerns[0], 1, 1),
+        poolsize=(2, 1)
     )
 
     # the HiddenLayer being fully-connected, it operates on 2D matrices of
@@ -243,15 +285,11 @@ def evaluate_lenet5(learning_rate=0.1, n_epochs=200,
     print('... training')
     # early-stopping parameters
     patience = 10000  # look as this many examples regardless
-    patience_increase = 2  # wait this much longer when a new best is
-                           # found
-    improvement_threshold = 0.995  # a relative improvement of this much is
-                                   # considered significant
+    patience_increase = 2  # wait this much longer when a new best is found
+    improvement_threshold = 0.995  # a relative improvement of this much is considered significant
     validation_frequency = min(n_train_batches, patience // 2)
-                                  # go through this many
-                                  # minibatche before checking the network
-                                  # on the validation set; in this case we
-                                  # check every epoch
+                                  # go through this many minibatches before checking the network
+                                  # on the validation set; in this case we check every epoch
 
     best_validation_loss = numpy.inf
     best_iter = 0
@@ -284,7 +322,7 @@ def evaluate_lenet5(learning_rate=0.1, n_epochs=200,
                 # if we got the best validation score until now
                 if this_validation_loss < best_validation_loss:
 
-                    #improve patience if loss improvement is good enough
+                    # improve patience if loss improvement is good enough
                     if this_validation_loss < best_validation_loss *  \
                        improvement_threshold:
                         patience = max(patience, iter * patience_increase)
@@ -322,4 +360,5 @@ if __name__ == '__main__':
 
 
 def experiment(state, channel):
-    evaluate_lenet5(state.learning_rate, dataset=state.dataset)
+    #evaluate_lenet5(state.learning_rate, dataset=state.dataset)
+    load_data()
