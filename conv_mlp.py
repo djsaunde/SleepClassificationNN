@@ -141,7 +141,7 @@ def load_data():
 
 def evaluate_lenet5(learning_rate=0.1, n_epochs=200,
                     dataset='mnist.pkl.gz',
-                    nkerns=[20, 50], batch_size=1):
+                    nkerns=[20, 1], batch_size=1):
     """ Demonstrates lenet on MNIST dataset
 
     :type learning_rate: float
@@ -207,7 +207,7 @@ def evaluate_lenet5(learning_rate=0.1, n_epochs=200,
     layer1 = LeNetConvPoolLayer(
         rng,
         input=layer0.output,
-        image_shape=(batch_size, nkerns[0], 4, 4),
+        image_shape=(batch_size, nkerns[0], 375, 1),
         filter_shape=(nkerns[1], nkerns[0], 1, 1),
         poolsize=(2, 1)
     )
