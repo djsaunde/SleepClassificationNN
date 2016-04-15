@@ -71,20 +71,24 @@ def get_data(index, downsample_factor):
 				values[k].append(float(split_line[k]))
 
 		if (i + 1) % (sample_rate * epoch_length) == 0:
-			inputs = []
+			epoch = []
 			for (k, value) in enumerate(values):
 				values[k] = downsample(np.abs(np.real(rfft(value))), 1.0 / downsample_factor)
 				if len(values[k]) != 3000 / downsample_factor:
 					print(len(values[k]))
 					print('1st')
-				inputs.append(values[k])
-			epochs.extend(inputs)
+				epoch.append(values[k])
+
+			epoch = np.array(epoch)
+			epoch = epoch.flatten()
+
+			epochs.append(epoch)
 
 			values = []
 			for j in range(10):
 				values.append([])
 
-	inputs = []
+	epoch = []
 	for (k, value) in enumerate(values):
 		for i in range(len(values[k]) + 1, 6000):
 			values[k].append(0)
@@ -92,10 +96,14 @@ def get_data(index, downsample_factor):
 		if len(values[k]) != 3000 / downsample_factor:
 			print(len(values[k]))
 			print('2nd')
-		inputs.append(values[k])
-	epochs.extend(inputs)
+		epoch.append(values[k])
 
-	epochs = np.array(epochs, dtype = 'float32')
+	epoch = np.array(epoch)
+	epoch = epoch.flatten()
+
+	epochs.append(epoch)
+
+	epochs = np.array(epochs)
 
 	print(epochs.shape)
 
