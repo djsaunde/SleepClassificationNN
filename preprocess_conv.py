@@ -3,65 +3,78 @@ import numpy as np
 import cPickle as pickle
 from numpy.fft import rfft
 from itertools import islice
+from itertools import chain
 
 
-def downsample(rows, proportion = 1.0):
+def downsample(rows, proportion = 1.0):  # simple downsampling method used in reducing dimension of spectral plot input
 	return list(islice(rows, 0, len(rows), int(1 / proportion)))
 
 
-def get_all_data(downsample_factor):
-	train_data = ([], [])
+def get_all_data(downsample_factor):  # builds pickled, zipped files for training, validation, and testing
+	train_data_x = []
+	train_data_y = []
+
 	for i in range(1, 12):
-		if i == 4 or i == 5 or i == 6 or i == 7 or i == 8 or i == 9 or i == 11:
+		if i == 4 or i == 5 or i == 6 or i == 7 or i == 8 or i == 9 or i == 11:  # bad data :(
 			continue
 		print '...loading training file for participant %d' % i
 		data = get_data(i, downsample_factor)
-		train_data[0].extend(data[0])
-		train_data[1].extend(data[1])
+		train_data_x.extend(data[0])
+		train_data_y.extend(data[1])
+
+	train_data = (np.array(train_data_x), np.array(train_data_y))
 
 	with gzip.open('train_data.pkl.gz', 'wb') as f:
 		pickle.dump(train_data, f)
 
-	valid_data = ([], [])
+	valid_data_x = []
+	valid_data_y = []
+
 	for i in range(12, 14):
 		print '...loading validation file for participant %d' % i
 		data = get_data(i, downsample_factor)
-		valid_data[0].extend(data[0])
-		valid_data[1].extend(data[1])
+		valid_data_x.extend(data[0])
+		valid_data_y.extend(data[1])
+
+	valid_data = (np.array(valid_data_x), np.array(valid_data_y))
 
 	with gzip.open('valid_data.pkl.gz', 'wb') as f:
 		pickle.dump(valid_data, f)
 
-	test_data = ([], [])
+	test_data_x = []
+	test_data_y = []
+
 	for i in range(14, 16):
 		print '...loading test file for participant %d' % i
 		data = get_data(i, downsample_factor)
-		test_data[0].extend(data[0])
-		test_data[1].extend(data[1])
+		test_data_x.extend(data[0])
+		test_data_y.extend(data[1])
+
+	test_data = (np.array(test_data_x), np.array(test_data_y))
 
 	with gzip.open('test_data.pkl.gz', 'wb') as f:
 		pickle.dump(test_data, f)
 
 
-def stage(stage):
+def stage(stage):  # codes each sleep stage as a unique integer
 	switcher = { 'W': 0, 'N1': 1, 'N2': 2, 'N3': 3, 'R': 4, 'No Stage': 5 }
 	return switcher.get(stage)
 
 
-def get_data(index, downsample_factor):
-	sample_rate = 200
-	epoch_length = 30
+def get_data(index, downsample_factor):  # gets input, expected output for a given participant
+	sample_rate = 200  # electrode sampling rate in Hz
+	epoch_length = 30  # length in seconds of a single epoch
 
-	data = open("PSG Data/p%d.txt" % index, "r")
+	data = open("PSG Data/p%d.txt" % index, "r")  # open PSG data for a given participant
 
-	split_file = data.read().split('\n')
+	split_file = data.read().split('\n')  # split line by line (each line is a single sample from all 10 electrodes
 
 	epochs = []
 
 	print '...reading raw PSG data into Fourier transformed epochs'
 
 	values = []
-	for j in range(10):
+	for j in range(10):  # there are 10 signal readings per line
 		values.append([])
 
 	for i in range(len(split_file)):
@@ -70,42 +83,34 @@ def get_data(index, downsample_factor):
 			for k in range(10):
 				values[k].append(float(split_line[k]))
 
-		if (i + 1) % (sample_rate * epoch_length) == 0:
+		if (i + 1) % (sample_rate * epoch_length) == 0:  # this ensures that we start a new epoch after 220 * 30 samples
 			epoch = []
-			for (k, value) in enumerate(values):
-				values[k] = downsample(np.abs(np.real(rfft(value))), 1.0 / downsample_factor)
-				if len(values[k]) != 3000 / downsample_factor:
-					print(len(values[k]))
-					print('1st')
+			for (k, value) in enumerate(values):  # for each signal in the epoch's worth of data
+				values[k] = downsample(np.abs(np.real(rfft(value))), 1.0 / downsample_factor)  # we do the real FFT on
+				# the epoch's worth of
+				# data and further downsample
+				# by the input factor
 				epoch.append(values[k])
 
-			epoch = np.array(epoch)
+			epoch = np.array(epoch, dtype = 'float32')  # float32 is necessary for the DPNN package
 			epoch = epoch.flatten()
 
-			epochs.append(epoch)
+			epochs.append(epoch)  # add this epoch's data to our list of epochs
 
-			values = []
+			values = []  # reset this array of arrays to prepare for the next epoch
 			for j in range(10):
 				values.append([])
 
 	epoch = []
 	for (k, value) in enumerate(values):
 		for i in range(len(values[k]) + 1, 6000):
-			values[k].append(0)
+			values[k].append(0)  # if the last epoch was cut short, we pad it to the correct length with 0's
 		values[k] = downsample(np.abs(np.real(rfft(value))), 1.0 / downsample_factor)
-		if len(values[k]) != 3000 / downsample_factor:
-			print(len(values[k]))
-			print('2nd')
 		epoch.append(values[k])
 
-	epoch = np.array(epoch)
-	epoch = epoch.flatten()
+	epoch = [item for sublist in epoch for item in sublist]
 
-	epochs.append(epoch)
-
-	epochs = np.array(epochs)
-
-	print(epochs.shape)
+	epochs.append(np.array(epoch, dtype = 'float32'))
 
 	teacher = open("PSG Data/p%d_ss.txt" % index, "r")
 
@@ -139,7 +144,7 @@ def get_data(index, downsample_factor):
 	for i in range(cur_index, sleep_stages[-1][0]):
 		temp.append(cur_stage)
 
-	sleep_stages = np.array(temp)
+	sleep_stages = temp
 
 	if len(sleep_stages) < len(epochs):
 		epochs = epochs[0:len(sleep_stages)]
