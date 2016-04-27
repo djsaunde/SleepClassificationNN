@@ -3,8 +3,7 @@ import numpy as np
 import cPickle as pickle
 from numpy.fft import rfft
 from itertools import islice
-from itertools import chain
-
+import math
 
 def downsample(rows, proportion = 1.0):  # simple downsampling method used in reducing dimension of spectral plot input
 	return list(islice(rows, 0, len(rows), int(1 / proportion)))
@@ -14,7 +13,7 @@ def get_all_data(downsample_factor):  # builds pickled, zipped files for trainin
 	train_data_x = []
 	train_data_y = []
 
-	for i in range(1, 12):
+	for i in range(1, 2):
 		if i == 4 or i == 5 or i == 6 or i == 7 or i == 8 or i == 9 or i == 11:  # bad data :(
 			continue
 		print '...loading training file for participant %d' % i
@@ -26,40 +25,8 @@ def get_all_data(downsample_factor):  # builds pickled, zipped files for trainin
 
 	train_data = (np.array(train_data_x), np.array(train_data_y))
 
-	with gzip.open('train_data_' + str(downsample_factor) + '.pkl.gz', 'wb') as f:
+	with gzip.open('train_data_' + str(downsample_factor) + '_one.pkl.gz', 'wb') as f:
 		pickle.dump(train_data, f)
-
-	valid_data_x = []
-	valid_data_y = []
-
-	for i in range(12, 14):
-		print '...loading validation file for participant %d' % i
-		data = get_data(i, downsample_factor)
-		valid_data_x.extend(data[0])
-		valid_data_y.extend(data[1])
-
-	print '...pickling validation data'
-
-	valid_data = (np.array(valid_data_x), np.array(valid_data_y))
-
-	with gzip.open('valid_data_' + str(downsample_factor) + '.pkl.gz', 'wb') as f:
-		pickle.dump(valid_data, f)
-
-	test_data_x = []
-	test_data_y = []
-
-	for i in range(14, 16):
-		print '...loading test file for participant %d' % i
-		data = get_data(i, downsample_factor)
-		test_data_x.extend(data[0])
-		test_data_y.extend(data[1])
-
-	print '...pickling testing data'
-
-	test_data = (np.array(test_data_x), np.array(test_data_y))
-
-	with gzip.open('test_data_' + str(downsample_factor) + '.pkl.gz', 'wb') as f:
-		pickle.dump(test_data, f)
 
 
 def stage(stage):  # codes each sleep stage as a unique integer
@@ -100,8 +67,6 @@ def get_data(index, downsample_factor):  # gets input, expected output for a giv
 
 			epochs.append(epoch)  # add this epoch's data to our list of epochs
 
-			epochs.append(epoch)  # add this epoch's data to our list of epochs
-
 			values = []  # reset this array of arrays to prepare for the next epoch
 			for j in range(10):
 				values.append([])
@@ -115,7 +80,7 @@ def get_data(index, downsample_factor):  # gets input, expected output for a giv
 
 	epoch = [item for sublist in epoch for item in sublist]
 
-	epochs.append(epoch)
+	epochs.append(epoch) # add this epoch's data to our list of epochs
 
 	epochs = np.array(epochs, dtype = 'float32')
 
