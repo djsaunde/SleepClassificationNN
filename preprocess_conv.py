@@ -24,7 +24,7 @@ def get_all_data(downsample_factor):  # builds pickled, zipped files for trainin
 
 	train_data = (np.array(train_data_x), np.array(train_data_y))
 
-	with gzip.open('train_data.pkl.gz', 'wb') as f:
+	with gzip.open('train_data_' + str(downsample_factor) + '.pkl.gz', 'wb') as f:
 		pickle.dump(train_data, f)
 
 	valid_data_x = []
@@ -38,7 +38,7 @@ def get_all_data(downsample_factor):  # builds pickled, zipped files for trainin
 
 	valid_data = (np.array(valid_data_x), np.array(valid_data_y))
 
-	with gzip.open('valid_data.pkl.gz', 'wb') as f:
+	with gzip.open('valid_data_' + str(downsample_factor) + '.pkl.gz', 'wb') as f:
 		pickle.dump(valid_data, f)
 
 	test_data_x = []
@@ -52,7 +52,7 @@ def get_all_data(downsample_factor):  # builds pickled, zipped files for trainin
 
 	test_data = (np.array(test_data_x), np.array(test_data_y))
 
-	with gzip.open('test_data.pkl.gz', 'wb') as f:
+	with gzip.open('test_data_' + str(downsample_factor) + '.pkl.gz', 'wb') as f:
 		pickle.dump(test_data, f)
 
 
@@ -92,8 +92,7 @@ def get_data(index, downsample_factor):  # gets input, expected output for a giv
 				# by the input factor
 				epoch.append(values[k])
 
-			epoch = np.array(epoch, dtype = 'float32')  # float32 is necessary for the DPNN package
-			epoch = epoch.flatten()
+			epoch = [item for sublist in epoch for item in sublist]
 
 			epochs.append(epoch)  # add this epoch's data to our list of epochs
 
@@ -103,14 +102,14 @@ def get_data(index, downsample_factor):  # gets input, expected output for a giv
 
 	epoch = []
 	for (k, value) in enumerate(values):
-		for i in range(len(values[k]) + 1, 6000):
+		for i in range(len(values[k]) + 1, 6000 / downsample_factor):
 			values[k].append(0)  # if the last epoch was cut short, we pad it to the correct length with 0's
 		values[k] = downsample(np.abs(np.real(rfft(value))), 1.0 / downsample_factor)
 		epoch.append(values[k])
 
 	epoch = [item for sublist in epoch for item in sublist]
 
-	epochs.append(np.array(epoch, dtype = 'float32'))
+	epochs.append(epoch)
 
 	teacher = open("PSG Data/p%d_ss.txt" % index, "r")
 
