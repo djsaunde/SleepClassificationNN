@@ -3,11 +3,15 @@ import numpy as np
 import cPickle as pickle
 from numpy.fft import rfft
 from itertools import islice
-from itertools import chain
+import math, scipy
 
 
-def downsample(rows, proportion = 1.0):  # simple downsampling method used in reducing dimension of spectral plot input
-	return list(islice(rows, 0, len(rows), int(1 / proportion)))
+def downsample(rows, downsample_factor):  # simple downsampling method used in reducing dimension of spectral plot input
+	rows = np.array(rows)
+	pad_size = math.ceil(float(rows.size)/downsample_factor) * downsample_factor - rows.size
+	rows_padded = np.append(rows, np.zeros(pad_size)*np.NaN)
+	scipy.nanmean(rows_padded.reshape(-1, downsample_factor), axis=1)
+	return list(rows_padded)
 
 
 def get_all_data(downsample_factor):  # builds pickled, zipped files for training, validation, and testing
@@ -92,7 +96,7 @@ def get_data(index, downsample_factor):  # gets input, expected output for a giv
 		if (i + 1) % (sample_rate * epoch_length) == 0:  # this ensures that we start a new epoch after 220 * 30 samples
 			epoch = []
 			for (k, value) in enumerate(values):  # for each signal in the epoch's worth of data
-				values[k] = downsample(np.abs(np.real(rfft(value))), 1.0 / downsample_factor)  # we do the real FFT on
+				values[k] = downsample(np.abs(np.real(rfft(value))), downsample_factor)  # we do the real FFT on
 				# the epoch's worth of data and further downsample by the input factor
 				epoch.append(values[k])
 
@@ -110,7 +114,7 @@ def get_data(index, downsample_factor):  # gets input, expected output for a giv
 	for (k, value) in enumerate(values):
 		for i in range(len(values[k]) + 1, 6000):
 			values[k].append(0)  # if the last epoch was cut short, we pad it to the correct length with 0's
-		values[k] = downsample(np.abs(np.real(rfft(value))), 1.0 / downsample_factor)
+		values[k] = downsample(np.abs(np.real(rfft(value))), downsample_factor)
 		epoch.append(values[k])
 
 	epoch = [item for sublist in epoch for item in sublist]
